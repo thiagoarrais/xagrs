@@ -1,10 +1,11 @@
 [package]
 name = "xagrs"
+description = "xargs clone in Rust"
 version = "0.1.0"
 authors = ["Thiago Arrais <thiago.arrais@gmail.com>"]
 edition = "2018"
 license = "MIT"
-description = "xargs clone in Rust"
+repository = "https://github.com/thiagoarrais/xagrs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
