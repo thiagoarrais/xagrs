@@ -8,10 +8,12 @@ fn main() {
     let mut args = env::args().skip(1);
     let command_opt = args.next();
     if let Some(command) = command_opt {
-        let line = stdin.lock().lines().next().unwrap().unwrap();
-        Command::new(&command)
-            .args(args.chain(iter::once(line)))
-            .spawn()
-            .expect("something went wrong");
+        let command_args : Vec<String> = args.collect();
+        for line in stdin.lock().lines() {
+            Command::new(&command)
+                .args(command_args.iter().chain(iter::once(&line.unwrap())))
+                .spawn()
+                .expect("something went wrong");
+        }
     }
 }
