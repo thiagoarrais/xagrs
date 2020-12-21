@@ -10,8 +10,10 @@ struct Opt {
     #[structopt(short = "L", default_value = "1")]
     limit: usize,
 
-    // #[structopt(short = "L", default_value = "1")]
-    command_args: Vec<String>,
+    #[structopt(default_value = "echo")]
+    command: String,
+
+    fixed_args: Vec<String>,
 }
 
 fn chunk_lines<L>(limit: usize, lines: L) -> IntoChunks<L>
@@ -22,16 +24,13 @@ fn chunk_lines<L>(limit: usize, lines: L) -> IntoChunks<L>
 
 fn main() -> Result<(), Error> {
     let stdin = io::stdin();
-    let mut opt = Opt::from_args();
-    if opt.command_args.len() > 0 {
-        let command = opt.command_args.remove(0);
-        for chunk in &chunk_lines(opt.limit, stdin.lock().lines()) {
-            // TODO: is it OK to unwrap?
-            let input = chunk.into_iter().map(|s| s.unwrap().to_owned());
-            Command::new(&command)
-                .args(opt.command_args.clone().into_iter().chain(input))
-                .spawn()?;
-        }
+    let opt = Opt::from_args();
+    for chunk in &chunk_lines(opt.limit, stdin.lock().lines()) {
+        // TODO: is it OK to unwrap?
+        let input = chunk.into_iter().map(|s| s.unwrap().to_owned());
+        Command::new(&opt.command)
+            .args(opt.fixed_args.clone().into_iter().chain(input))
+            .spawn()?;
     }
     Ok(())
 }
