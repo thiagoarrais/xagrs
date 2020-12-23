@@ -2,11 +2,12 @@ use std::io::{self, BufRead, Error};
 use std::process::Command;
 
 use itertools::{ Itertools, IntoChunks };
-use structopt::clap::ArgSettings;
+use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "xagrs")]
+#[structopt(settings = &[AppSettings::TrailingVarArg])]
 struct Opt {
     #[structopt(short = "L", default_value = "1")]
     limit: usize,
@@ -14,11 +15,8 @@ struct Opt {
     #[structopt(short = "t", long = "verbose")]
     verbose: bool,
 
-    #[structopt(default_value = "echo")]
-    command: String,
-
-    #[structopt(set = ArgSettings::Last, name="args for command", help="Arguments that should be passed to the command on every invocation")]
-    fixed_args: Vec<String>,
+    #[structopt(name="command", help="Command (with arguments) to execute")]
+    command_with_args: Vec<String>,
 }
 
 fn chunk_lines<L>(limit: usize, lines: L) -> IntoChunks<L>
@@ -30,15 +28,20 @@ fn chunk_lines<L>(limit: usize, lines: L) -> IntoChunks<L>
 // TODO: make error more friendly
 fn main() -> Result<(), Error> {
     let stdin = io::stdin();
-    let opt = Opt::from_args();
+    let mut opt = Opt::from_args();
+    let command = if opt.command_with_args.len() > 0 {
+        opt.command_with_args.remove(0)
+    } else {
+        String::from("echo")
+    };
     for chunk in &chunk_lines(opt.limit, stdin.lock().lines()) {
         // TODO: is it OK to unwrap?
         let input: Vec<String> = chunk.into_iter().map(|s| s.unwrap().to_owned()).collect();
         if opt.verbose {
-            println!("{}", opt.command.to_owned() + " " + &input.join(" "));
+            println!("{}", command.to_owned() + " " + &input.join(" "));
         }
-        Command::new(&opt.command)
-            .args(opt.fixed_args.clone().into_iter().chain(input))
+        Command::new(&command)
+            .args(opt.command_with_args.clone().into_iter().chain(input))
             .spawn()?;
     }
     Ok(())
