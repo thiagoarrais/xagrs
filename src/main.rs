@@ -1,7 +1,7 @@
 use std::io::{self, BufRead, Error};
 use std::process::Command;
 
-use itertools::{ Itertools, IntoChunks };
+use itertools::{IntoChunks, Itertools};
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
@@ -15,12 +15,13 @@ struct Opt {
     #[structopt(short = "t", long = "verbose")]
     verbose: bool,
 
-    #[structopt(name="command", help="Command (with arguments) to execute")]
+    #[structopt(name = "command", help = "Command (with arguments) to execute")]
     command_with_args: Vec<String>,
 }
 
 fn chunk_lines<L>(limit: usize, lines: L) -> IntoChunks<L>
-  where L: Iterator
+where
+    L: Iterator,
 {
     lines.chunks(limit)
 }
@@ -57,9 +58,11 @@ mod tests {
         let chunked = &chunk_lines(2, input.into_iter());
         let mut output = chunked.into_iter();
 
-        assert_eq!(output.next().unwrap().collect::<Vec<&str>>(), vec!("one", "two"));
+        assert_eq!(
+            output.next().unwrap().collect::<Vec<&str>>(),
+            vec!("one", "two")
+        );
         assert_eq!(output.next().unwrap().collect::<Vec<&str>>(), vec!("three"));
         assert!(output.next().is_none());
     }
-
 }
