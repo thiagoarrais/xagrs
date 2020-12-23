@@ -2,6 +2,7 @@ use std::io::{self, BufRead, Error};
 use std::process::Command;
 
 use itertools::{ Itertools, IntoChunks };
+use structopt::clap::ArgSettings;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -16,6 +17,7 @@ struct Opt {
     #[structopt(default_value = "echo")]
     command: String,
 
+    #[structopt(set = ArgSettings::Last, name="args for command", help="Arguments that should be passed to the command on every invocation")]
     fixed_args: Vec<String>,
 }
 
