@@ -39,7 +39,10 @@ fn main() -> Result<(), Error> {
         // TODO: is it OK to unwrap?
         let input: Vec<String> = chunk.into_iter().map(|s| s.unwrap().to_owned()).collect();
         if opt.verbose {
-            println!("{}", command.to_owned() + " " + &input.join(" "));
+            let mut command_line = vec![command.to_owned()];
+            command_line.extend(opt.command_with_args.clone());
+            command_line.extend(input.clone());
+            println!("{}", &command_line.join(" "));
         }
         Command::new(&command)
             .args(opt.command_with_args.clone().into_iter().chain(input))
