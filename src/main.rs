@@ -1,7 +1,7 @@
 use std::io::{self, BufRead, Error};
 use std::process::Command;
 
-use itertools::{IntoChunks, Itertools};
+use itertools::{Chunk, IntoChunks, Itertools};
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
@@ -17,6 +17,42 @@ struct Opt {
 
     #[structopt(name = "command", help = "Command (with arguments) to execute")]
     command_with_args: Vec<String>,
+}
+
+impl Opt {
+    fn chunker<F>(
+        self: &Self,
+        lines: std::io::Lines<std::io::StdinLock>,
+        mut op: F,
+    ) -> Result<(), Error>
+    where
+        F: FnMut(Chunk<std::io::Lines<std::io::StdinLock>>) -> Result<(), Error>,
+    {
+        for chunk in &chunk_lines(self.limit, lines) {
+            op(chunk)?
+        }
+        Ok(())
+    }
+
+    fn executor<'a>(
+        self: &'a Self,
+        command: &'a str,
+        fixed_args: &'a [String],
+    ) -> impl FnMut(&[String]) -> Result<(), Error> + 'a {
+        move |input| {
+            if self.verbose {
+                let mut command_line = vec![command.to_owned()];
+                command_line.extend(fixed_args.to_owned());
+                command_line.extend(input.to_owned());
+                println!("{}", &command_line.join(" "));
+            }
+            Command::new(command.clone())
+                .args(fixed_args.clone().into_iter().chain(input))
+                .spawn()?
+                .wait()?;
+            Ok(())
+        }
+    }
 }
 
 fn chunk_lines<L>(limit: usize, lines: L) -> IntoChunks<L>
@@ -35,20 +71,17 @@ fn main() -> Result<(), Error> {
     } else {
         String::from("echo")
     };
-    for chunk in &chunk_lines(opt.limit, stdin.lock().lines()) {
-        // TODO: is it OK to unwrap?
-        let input: Vec<String> = chunk.into_iter().map(|s| s.unwrap().to_owned()).collect();
-        if opt.verbose {
-            let mut command_line = vec![command.to_owned()];
-            command_line.extend(opt.command_with_args.clone());
-            command_line.extend(input.clone());
-            println!("{}", &command_line.join(" "));
-        }
-        Command::new(&command)
-            .args(opt.command_with_args.clone().into_iter().chain(input))
-            .spawn()?;
-    }
-    Ok(())
+    let fixed_args = opt.command_with_args.clone();
+    let mut executor = opt.executor(&command, &fixed_args);
+    opt.chunker(
+        stdin.lock().lines(),
+        |chunk: Chunk<std::io::Lines<std::io::StdinLock>>| {
+            // TODO: is it OK to unwrap?
+            let input: Vec<String> = chunk.into_iter().map(|s| s.unwrap()).collect();
+            executor(&input)?;
+            Ok(())
+        },
+    )
 }
 
 #[cfg(test)]
