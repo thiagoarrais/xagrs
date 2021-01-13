@@ -12,6 +12,9 @@ struct Opt {
     #[structopt(short = "L", default_value = "1")]
     limit: usize,
 
+    #[structopt(short = "i", long = "replace")]
+    replace: Option<String>,
+
     #[structopt(short = "t", long = "verbose")]
     verbose: bool,
 
@@ -34,22 +37,45 @@ impl Opt {
         Ok(())
     }
 
+    fn command(
+        self: &Self,
+        command: &str,
+        fixed_args: &[String],
+        input: &[String],
+    ) -> (String, Vec<String>) {
+        let args = match &self.replace {
+            None => fixed_args
+                .clone()
+                .into_iter()
+                .chain(input)
+                .map(|s| s.to_owned())
+                .collect(),
+            Some(pattern) => {
+                let joined_input = input.join(" ");
+                fixed_args
+                    .clone()
+                    .into_iter()
+                    .map(|s| s.replace(pattern, &joined_input))
+                    .collect()
+            }
+        };
+
+        (command.to_owned(), args)
+    }
+
     fn executor<'a>(
         self: &'a Self,
         command: &'a str,
         fixed_args: &'a [String],
     ) -> impl FnMut(&[String]) -> Result<(), Error> + 'a {
         move |input| {
+            let (program, args) = self.command(command, fixed_args, input);
             if self.verbose {
-                let mut command_line = vec![command.to_owned()];
-                command_line.extend(fixed_args.to_owned());
-                command_line.extend(input.to_owned());
+                let mut command_line = vec![program.clone()];
+                command_line.extend(args.to_owned());
                 println!("{}", &command_line.join(" "));
             }
-            Command::new(command.clone())
-                .args(fixed_args.clone().into_iter().chain(input))
-                .spawn()?
-                .wait()?;
+            Command::new(program).args(args).spawn()?.wait()?;
             Ok(())
         }
     }
