@@ -5,7 +5,7 @@ use itertools::{Chunk, IntoChunks, Itertools};
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Default, StructOpt)]
 #[structopt(name = "xagrs")]
 #[structopt(settings = &[AppSettings::TrailingVarArg])]
 struct Opt {
@@ -37,14 +37,24 @@ impl Opt {
         Ok(())
     }
 
+    fn program(self: &Self) -> &str {
+        if self.command_with_args.len() > 0 {
+            &self.command_with_args[0]
+        } else {
+            "echo"
+        }
+    }
+
+    fn fixed_args(self: &Self) -> &[String] {
+        &self.command_with_args[1..]
+    }
+
     fn command(
         self: &Self,
-        command: &str,
-        fixed_args: &[String],
         input: &[String],
     ) -> (String, Vec<String>) {
         let args = match &self.replace {
-            None => fixed_args
+            None => self.fixed_args()
                 .clone()
                 .into_iter()
                 .chain(input)
@@ -52,7 +62,7 @@ impl Opt {
                 .collect(),
             Some(pattern) => {
                 let joined_input = input.join(" ");
-                fixed_args
+                self.fixed_args()
                     .clone()
                     .into_iter()
                     .map(|s| s.replace(pattern, &joined_input))
@@ -60,16 +70,14 @@ impl Opt {
             }
         };
 
-        (command.to_owned(), args)
+        (self.program().to_owned(), args)
     }
 
     fn executor<'a>(
         self: &'a Self,
-        command: &'a str,
-        fixed_args: &'a [String],
     ) -> impl FnMut(&[String]) -> Result<(), Error> + 'a {
         move |input| {
-            let (program, args) = self.command(command, fixed_args, input);
+            let (program, args) = self.command(input);
             if self.verbose {
                 let mut command_line = vec![program.clone()];
                 command_line.extend(args.to_owned());
@@ -91,14 +99,8 @@ where
 // TODO: make error more friendly
 fn main() -> Result<(), Error> {
     let stdin = io::stdin();
-    let mut opt = Opt::from_args();
-    let command = if opt.command_with_args.len() > 0 {
-        opt.command_with_args.remove(0)
-    } else {
-        String::from("echo")
-    };
-    let fixed_args = opt.command_with_args.clone();
-    let mut executor = opt.executor(&command, &fixed_args);
+    let opt = Opt::from_args();
+    let mut executor = opt.executor();
     opt.chunker(
         stdin.lock().lines(),
         |chunk: Chunk<std::io::Lines<std::io::StdinLock>>| {
@@ -113,6 +115,46 @@ fn main() -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn echo_is_default_command() {
+        let mut opt = Opt::default();
+        opt.command_with_args = vec![];
+        let opt = opt;
+
+        assert_eq!(opt.program(), "echo");
+    }
+
+    #[test]
+    fn splits_program_and_args() {
+        let mut opt = Opt::default();
+        opt.command_with_args = vec!["program", "arg1", "arg2", "arg3"].into_iter().map(|s| { s.to_owned() }).collect();
+        let opt = opt;
+
+        assert_eq!(opt.program(), "program");
+        assert_eq!(opt.fixed_args(), ["arg1", "arg2", "arg3"]);
+    }
+
+    #[test]
+    fn concats_input_to_the_end_of_fixed_args() {
+        let mut opt = Opt::default();
+        opt.command_with_args = vec!["program", "arg1", "arg2"].into_iter().map(|s| { s.to_owned() }).collect();
+        let opt = opt;
+
+        let (_, args) = opt.command(&vec!["input1", "input2", "input3"].into_iter().map(|s| { s.to_owned() }).collect::<Vec<String>>());
+        assert_eq!(args, ["arg1", "arg2", "input1", "input2", "input3"])
+    }
+
+    #[test]
+    fn replaces_pattern_with_input() {
+        let mut opt = Opt::default();
+        opt.replace = Some(String::from("PP"));
+        opt.command_with_args = vec!["program", "PP", "abcPPghi", "jklm"].into_iter().map(|s| { s.to_owned() }).collect();
+        let opt = opt;
+
+        let (_, args) = opt.command(&vec!["def"].into_iter().map(|s| { s.to_owned() }).collect::<Vec<String>>());
+        assert_eq!(args, ["def", "abcdefghi", "jklm"])
+    }
 
     #[test]
     fn test_chunk_lines_for_command() {
