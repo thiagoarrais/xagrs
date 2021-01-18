@@ -49,16 +49,18 @@ impl Opt {
         &self.command_with_args[1..]
     }
 
-    fn command(
-        self: &Self,
-        input: &[String],
-    ) -> (String, Vec<String>) {
+    fn command(self: &Self, input: &[String]) -> (String, Vec<String>) {
         let args = match &self.replace {
-            None => self.fixed_args()
+            None => self
+                .fixed_args()
                 .clone()
                 .into_iter()
-                .chain(input)
                 .map(|s| s.to_owned())
+                .chain(
+                    input
+                        .iter()
+                        .flat_map(|s| s.split_whitespace().map(|s| s.to_owned())),
+                )
                 .collect(),
             Some(pattern) => {
                 let joined_input = input.join(" ");
@@ -73,9 +75,7 @@ impl Opt {
         (self.program().to_owned(), args)
     }
 
-    fn executor<'a>(
-        self: &'a Self,
-    ) -> impl FnMut(&[String]) -> Result<(), Error> + 'a {
+    fn executor<'a>(self: &'a Self) -> impl FnMut(&[String]) -> Result<(), Error> + 'a {
         move |input| {
             let (program, args) = self.command(input);
             if self.verbose {
@@ -128,31 +128,67 @@ mod tests {
     #[test]
     fn splits_program_and_args() {
         let mut opt = Opt::default();
-        opt.command_with_args = vec!["program", "arg1", "arg2", "arg3"].into_iter().map(|s| { s.to_owned() }).collect();
+        opt.command_with_args = vec!["program", "arg1", "arg2", "arg3"]
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
         let opt = opt;
 
         assert_eq!(opt.program(), "program");
         assert_eq!(opt.fixed_args(), ["arg1", "arg2", "arg3"]);
     }
-
     #[test]
     fn concats_input_to_the_end_of_fixed_args() {
         let mut opt = Opt::default();
-        opt.command_with_args = vec!["program", "arg1", "arg2"].into_iter().map(|s| { s.to_owned() }).collect();
+        opt.command_with_args = vec!["program", "arg1", "arg2"]
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
         let opt = opt;
 
-        let (_, args) = opt.command(&vec!["input1", "input2", "input3"].into_iter().map(|s| { s.to_owned() }).collect::<Vec<String>>());
+        let (_, args) = opt.command(
+            &vec!["input1", "input2", "input3"]
+                .into_iter()
+                .map(|s| s.to_owned())
+                .collect::<Vec<String>>(),
+        );
         assert_eq!(args, ["arg1", "arg2", "input1", "input2", "input3"])
+    }
+
+    #[test]
+    fn multiple_words_in_input_interpreted_as_multiple_arguments() {
+        let mut opt = Opt::default();
+        opt.command_with_args = vec!["program", "fixed"]
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
+        let opt = opt;
+
+        let (_, args) = opt.command(
+            &vec!["first  second"]
+                .into_iter()
+                .map(|s| s.to_owned())
+                .collect::<Vec<String>>(),
+        );
+        assert_eq!(args, ["fixed", "first", "second"])
     }
 
     #[test]
     fn replaces_pattern_with_input() {
         let mut opt = Opt::default();
         opt.replace = Some(String::from("PP"));
-        opt.command_with_args = vec!["program", "PP", "abcPPghi", "jklm"].into_iter().map(|s| { s.to_owned() }).collect();
+        opt.command_with_args = vec!["program", "PP", "abcPPghi", "jklm"]
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
         let opt = opt;
 
-        let (_, args) = opt.command(&vec!["def"].into_iter().map(|s| { s.to_owned() }).collect::<Vec<String>>());
+        let (_, args) = opt.command(
+            &vec!["def"]
+                .into_iter()
+                .map(|s| s.to_owned())
+                .collect::<Vec<String>>(),
+        );
         assert_eq!(args, ["def", "abcdefghi", "jklm"])
     }
 
